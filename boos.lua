@@ -1,10 +1,11 @@
--- Revenant UI Library v2.0
+-- Revenant UI Library v2.0 - 修复版
 -- 开发者客户端脚本模板
 
 local Revenant = {}
 Revenant.Version = "2.0"
 Revenant.Themes = {}
 Revenant.CurrentTheme = "Dark"
+Revenant.Elements = {}
 
 -- 颜色配置
 Revenant.Themes.Dark = {
@@ -43,7 +44,7 @@ local CoreGui = game:GetService("CoreGui")
 
 -- 清理旧UI
 for _,v in pairs(CoreGui:GetChildren()) do
-    if v.Name == "RevenantUI" or v.Name == "RevenantNotificationHolder" then
+    if v.Name == "RevenantUI" or v.Name == "RevenantNotificationHolder" or v.Name == "RevenantToggleButton" then
         v:Destroy()
     end
 end
@@ -115,29 +116,33 @@ local function CreateSnowEffect(parent)
 end
 
 -- 通知系统
-if not CoreGui:FindFirstChild("RevenantNotificationHolder") then
-    local notificationHolder = Instance.new("ScreenGui")
-    notificationHolder.Name = "RevenantNotificationHolder"
-    notificationHolder.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
-    notificationHolder.Parent = CoreGui
-    
-    local holderFrame = Instance.new("Frame")
-    holderFrame.Name = "HolderFrame"
-    holderFrame.AnchorPoint = Vector2.new(1, 0)
-    holderFrame.BackgroundTransparency = 1
-    holderFrame.Position = UDim2.new(1, -20, 0, 20)
-    holderFrame.Size = UDim2.new(0, 350, 1, -40)
-    holderFrame.Parent = notificationHolder
-    
-    local listLayout = Instance.new("UIListLayout")
-    listLayout.HorizontalAlignment = Enum.HorizontalAlignment.Right
-    listLayout.VerticalAlignment = Enum.VerticalAlignment.Bottom
-    listLayout.SortOrder = Enum.SortOrder.LayoutOrder
-    listLayout.Padding = UDim.new(0, 10)
-    listLayout.Parent = holderFrame
+local function SetupNotifications()
+    if not CoreGui:FindFirstChild("RevenantNotificationHolder") then
+        local notificationHolder = Instance.new("ScreenGui")
+        notificationHolder.Name = "RevenantNotificationHolder"
+        notificationHolder.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
+        notificationHolder.Parent = CoreGui
+        
+        local holderFrame = Instance.new("Frame")
+        holderFrame.Name = "HolderFrame"
+        holderFrame.AnchorPoint = Vector2.new(1, 0)
+        holderFrame.BackgroundTransparency = 1
+        holderFrame.Position = UDim2.new(1, -20, 0, 20)
+        holderFrame.Size = UDim2.new(0, 350, 1, -40)
+        holderFrame.Parent = notificationHolder
+        
+        local listLayout = Instance.new("UIListLayout")
+        listLayout.HorizontalAlignment = Enum.HorizontalAlignment.Right
+        listLayout.VerticalAlignment = Enum.VerticalAlignment.Bottom
+        listLayout.SortOrder = Enum.SortOrder.LayoutOrder
+        listLayout.Padding = UDim.new(0, 10)
+        listLayout.Parent = holderFrame
+    end
 end
 
-function Revenant:Notification(config)
+SetupNotifications()
+
+function Revenant.Notification(config)
     config = config or {}
     local title = config.Title or "通知"
     local content = config.Content or "这是一条通知"
@@ -255,13 +260,19 @@ function Revenant:Notification(config)
 end
 
 -- 创建侧边按钮
-function Revenant:CreateToggleButton(config)
+function Revenant.CreateToggleButton(config)
     config = config or {}
     local icon = config.Icon or "rbxassetid://134902782140905"
     local position = config.Position or UDim2.new(0, 20, 0, 20)
     
+    -- 检查是否已存在
+    local existing = CoreGui:FindFirstChild("RevenantToggleButton")
+    if existing then
+        existing:Destroy()
+    end
+    
     local toggleButton = Instance.new("ImageButton")
-    toggleButton.Name = "RevenantToggle"
+    toggleButton.Name = "RevenantToggleButton"
     toggleButton.Image = icon
     toggleButton.BackgroundColor3 = Revenant.Themes[Revenant.CurrentTheme].Secondary
     toggleButton.BackgroundTransparency = 0.1
@@ -291,15 +302,24 @@ function Revenant:CreateToggleButton(config)
     shadow.ZIndex = -1
     shadow.Parent = toggleButton
     
+    -- 存储引用
+    Revenant.Elements.ToggleButton = toggleButton
+    
     return toggleButton
 end
 
 -- 主窗口创建
-function Revenant:CreateWindow(config)
+function Revenant.CreateWindow(config)
     config = config or {}
     local title = config.Title or "孙坤脚本"
     local size = config.Size or UDim2.new(0, 700, 0, 500)
     local position = config.Position or UDim2.new(0.5, -350, 0.5, -250)
+    
+    -- 检查是否已存在
+    local existing = CoreGui:FindFirstChild("RevenantUI")
+    if existing then
+        existing:Destroy()
+    end
     
     -- 创建主窗口
     local mainWindow = Instance.new("ScreenGui")
@@ -500,12 +520,18 @@ function Revenant:CreateWindow(config)
     userIdLabel.Parent = userInfo
     
     -- 右侧功能区域
-    local functionArea = Instance.new("Frame")
+    local functionArea = Instance.new("ScrollingFrame")
     functionArea.Name = "FunctionArea"
     functionArea.BackgroundTransparency = 1
     functionArea.Position = UDim2.new(0, 202, 0, 0)
     functionArea.Size = UDim2.new(1, -202, 1, 0)
+    functionArea.CanvasSize = UDim2.new(0, 0, 0, 0)
+    functionArea.ScrollBarThickness = 3
     functionArea.Parent = contentArea
+    
+    local functionLayout = Instance.new("UIListLayout")
+    functionLayout.Padding = UDim.new(0, 10)
+    functionLayout.Parent = functionArea
     
     -- 动画显示窗口
     local showTween = TweenService:Create(mainContainer,
@@ -546,6 +572,8 @@ function Revenant:CreateWindow(config)
             {Size = UDim2.new(0, 0, 0, 0)}
         )
         tween:Play()
+        tween.Completed:Wait()
+        mainWindow.Enabled = false
     end)
     
     closeBtn.MouseButton1Click:Connect(function()
@@ -622,6 +650,9 @@ function Revenant:CreateWindow(config)
         confirmBtn.MouseButton1Click:Connect(function()
             snowConnection:Disconnect()
             mainWindow:Destroy()
+            if Revenant.Elements.ToggleButton then
+                Revenant.Elements.ToggleButton:Destroy()
+            end
         end)
     end)
     
@@ -740,6 +771,9 @@ function Revenant:CreateWindow(config)
             end
         end)
         
+        -- 更新滚动区域大小
+        functionArea.CanvasSize = UDim2.new(0, 0, 0, functionLayout.AbsoluteContentSize.Y)
+        
         return toggleFrame
     end
     
@@ -766,6 +800,9 @@ function Revenant:CreateWindow(config)
         button.MouseButton1Click:Connect(function()
             callback()
         end)
+        
+        -- 更新滚动区域大小
+        functionArea.CanvasSize = UDim2.new(0, 0, 0, functionLayout.AbsoluteContentSize.Y)
         
         return button
     end
@@ -881,6 +918,9 @@ function Revenant:CreateWindow(config)
             end
         end)
         
+        -- 更新滚动区域大小
+        functionArea.CanvasSize = UDim2.new(0, 0, 0, functionLayout.AbsoluteContentSize.Y)
+        
         return sliderFrame
     end
     
@@ -975,8 +1015,15 @@ function Revenant:CreateWindow(config)
             end)
         end
         
+        -- 更新滚动区域大小
+        functionArea.CanvasSize = UDim2.new(0, 0, 0, functionLayout.AbsoluteContentSize.Y)
+        
         return radioFrame
     end
+    
+    -- 存储窗口引用
+    Revenant.Elements.MainWindow = mainWindow
+    Revenant.Elements.WindowMethods = windowMethods
     
     return windowMethods
 end
